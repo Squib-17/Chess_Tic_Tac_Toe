@@ -35,12 +35,22 @@ export type Action =
   | { kind: 'MOVE'; pieceId: PieceId; to: number } // ply >= 7 only
   | { kind: 'CAPTURE'; pieceId: PieceId; to: number; capturedId: PieceId }; // ply >= 7 only
 
+export type MoveHistoryEntry = {
+  action: Action;
+  ply: number;
+  player: Player;
+  fromPos?: number; // For moves/captures, where piece moved from
+  toPos: number; // Where piece ended up
+  capturedPiece?: PieceId; // If a capture occurred
+};
+
 export type GameState = {
   board: (PieceId | null)[]; // length 16
   pieces: Record<PieceId, Piece>;
   turn: Player; // current player to act
   ply: number; // 1-based global move count
   winner: Player | null;
+  moveHistory: MoveHistoryEntry[]; // Track all moves for replay/analysis
 };
 
 const SIZE = 4;
@@ -244,6 +254,7 @@ export function getInitialState(startingPlayer: Player = 'W'): GameState {
     turn: startingPlayer,
     ply: 1,
     winner: null,
+    moveHistory: [],
   };
 }
 
@@ -405,6 +416,7 @@ function cloneState(state: GameState): GameState {
     turn: state.turn,
     ply: state.ply,
     winner: state.winner,
+    moveHistory: [...state.moveHistory], // Shallow copy is fine for history
   };
 }
 
@@ -504,7 +516,8 @@ export function applyAction(state: GameState, action: Action): GameState {
   validateAction(state, action);
   const next = cloneState(state);
 
-  // const piece = next.pieces[action.pieceId];
+  const piece = next.pieces[action.pieceId];
+  const fromPos = piece.pos; // Capture original position before move
 
   switch (action.kind) {
     case 'PLACE':
@@ -522,6 +535,17 @@ export function applyAction(state: GameState, action: Action): GameState {
       capturePiece(next, action.pieceId, action.to, action.capturedId);
       break;
   }
+
+  // Record move in history
+  const historyEntry: MoveHistoryEntry = {
+    action,
+    ply: state.ply,
+    player: state.turn,
+    fromPos: fromPos ?? undefined,
+    toPos: action.to,
+    capturedPiece: action.kind === 'CAPTURE' ? action.capturedId : undefined,
+  };
+  next.moveHistory = [...next.moveHistory, historyEntry];
 
   // Check for instant win after the move
   next.winner = checkWinner(next);

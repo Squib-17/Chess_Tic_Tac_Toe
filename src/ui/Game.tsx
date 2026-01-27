@@ -9,6 +9,7 @@ import {
 } from '../engine/chess-ttt-engine';
 import { getBotMove } from '../ai/bot-controller';
 import type { BotDifficulty } from '../ai/types';
+import { MoveHistory } from './MoveHistory';
 
 type UIState = {
   selectedReserve: PieceId | null;
@@ -133,6 +134,7 @@ export function Game() {
   const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>('medium');
   const [botPlayer, setBotPlayer] = useState<Player>('B');
   const [isBotThinking, setIsBotThinking] = useState(false);
+  const [viewingMoveIndex, setViewingMoveIndex] = useState<number | null>(null); // null = viewing live game
   const [ui, dispatch] = useReducer(uiReducer, {
     selectedReserve: null,
     selectedFrom: null,
@@ -141,12 +143,27 @@ export function Game() {
 
   const phase = getPhase(game.ply);
 
+  // Reconstruct board state at a specific move for replay
+  const displayedGame = useMemo(() => {
+    if (viewingMoveIndex === null || !game.winner) {
+      return game; // Live view
+    }
+
+    // Replay moves up to viewingMoveIndex
+    let state = getInitialState('W');
+    for (let i = 0; i <= viewingMoveIndex && i < game.moveHistory.length; i++) {
+      const entry = game.moveHistory[i];
+      state = applyAction(state, entry.action);
+    }
+    return state;
+  }, [game, viewingMoveIndex]);
+
   const selectedPiece: PieceId | null = ui.selectedReserve ?? ui.selectedFrom;
 
   const destinations = useMemo(() => {
-    if (!selectedPiece) return {};
+    if (!selectedPiece || viewingMoveIndex !== null) return {}; // No selection in replay mode
     return getDestinationsForPiece(game, selectedPiece);
-  }, [game, selectedPiece]);
+  }, [game, selectedPiece, viewingMoveIndex]);
 
   // Track previous winner to update score and trigger confetti
   const previousWinnerRef = useRef<'W' | 'B' | null>(null);
@@ -205,6 +222,7 @@ export function Game() {
 
   function onSquareClick(idx: number) {
     if (game.winner) return;
+    if (isInReplayMode) return; // Prevent input in replay mode
     if (gameMode === 'vs-bot' && game.turn === botPlayer) return; // Prevent human input during bot's turn
 
     const occ = game.board[idx];
@@ -258,6 +276,7 @@ export function Game() {
   // Placement/respawn selection (piece first -> square second)
   function onReservePieceClick(pieceId: PieceId) {
     if (game.winner) return;
+    if (isInReplayMode) return; // Prevent input in replay mode
     if (gameMode === 'vs-bot' && game.turn === botPlayer) return; // Prevent human input during bot's turn
 
     const p = game.pieces[pieceId];
@@ -287,32 +306,64 @@ export function Game() {
     setIsBotThinking(false);
     setShowWinnerOverlay(false);
     setShowConfetti(false);
+    setViewingMoveIndex(null);
   }
 
   function resetScore() {
     setScore({ white: 0, black: 0 });
   }
 
+  // Move history navigation
+  function goToPreviousMove() {
+    if (viewingMoveIndex === null) {
+      // Start viewing from last move
+      setViewingMoveIndex(game.moveHistory.length - 1);
+    } else if (viewingMoveIndex > 0) {
+      setViewingMoveIndex(viewingMoveIndex - 1);
+    }
+  }
+
+  function goToNextMove() {
+    if (viewingMoveIndex === null) return;
+    
+    if (viewingMoveIndex < game.moveHistory.length - 1) {
+      setViewingMoveIndex(viewingMoveIndex + 1);
+    } else {
+      // Return to live view
+      setViewingMoveIndex(null);
+    }
+  }
+
+  function goToMove(index: number) {
+    setViewingMoveIndex(index);
+  }
+
+  function returnToLive() {
+    setViewingMoveIndex(null);
+  }
+
   const whitePieces = [
-    game.pieces.W_P,
-    game.pieces.W_N,
-    game.pieces.W_B,
-    game.pieces.W_R,
+    displayedGame.pieces.W_P,
+    displayedGame.pieces.W_N,
+    displayedGame.pieces.W_B,
+    displayedGame.pieces.W_R,
   ];
   
   const blackPieces = [
-    game.pieces.B_P,
-    game.pieces.B_N,
-    game.pieces.B_B,
-    game.pieces.B_R,
+    displayedGame.pieces.B_P,
+    displayedGame.pieces.B_N,
+    displayedGame.pieces.B_B,
+    displayedGame.pieces.B_R,
   ];
 
   const phaseDisplay = phase === 'PLACEMENT_ONLY' 
     ? `Placement Phase (${game.ply}/6)` 
     : 'Movement Phase';
 
+  const isInReplayMode = viewingMoveIndex !== null;
+
   return (
-    <div className="game-container">
+    <div className="game-wrapper">
       {showConfetti && <Confetti recycle={false} numberOfPieces={500} />}
       
       {game.winner && showWinnerOverlay && (
@@ -335,162 +386,189 @@ export function Game() {
         </div>
       )}
 
-      <div className="status-bar">
-        <div className="game-info">
-          <div className="phase-indicator">{phaseDisplay}</div>
-          {game.winner ? (
-            <div className="winner-announcement">
-              🎉 {game.winner === 'W' ? 'White' : 'Black'} Wins!
-            </div>
-          ) : (
-            <div className="current-turn">
-              Turn: {game.turn === 'W' ? 'White' : 'Black'}
-            </div>
-          )}
-        </div>
-        <div className="score-and-controls">
-          <div className="score-tracker" title="Click to reset score" onClick={resetScore} style={{ cursor: 'pointer' }}>
-            <div className="score-item">
-              <span className="score-label">⚪ White</span>
-              <span className="score-value">{score.white}</span>
-            </div>
-            <div className="score-divider">-</div>
-            <div className="score-item">
-              <span className="score-label">⚫ Black</span>
-              <span className="score-value">{score.black}</span>
-            </div>
-          </div>
-          <button className="btn-primary" onClick={reset}>
-            New Game
-          </button>
-        </div>
-      </div>
-
-      <div className="game-mode-controls">
-        <div className="mode-selector">
-          <button 
-            className={`mode-btn ${gameMode === 'local' ? 'active' : ''}`}
-            onClick={() => {
-              setGameMode('local');
-              reset();
-            }}
-          >
-            👥 2 Players
-          </button>
-          <button 
-            className={`mode-btn ${gameMode === 'vs-bot' ? 'active' : ''}`}
-            onClick={() => {
-              setGameMode('vs-bot');
-              reset();
-            }}
-          >
-            🤖 vs Bot
-          </button>
-        </div>
-
-        {gameMode === 'vs-bot' && (
-          <div className="bot-controls">
-            <label className="bot-control-label">
-              Difficulty:
-              <select 
-                className="difficulty-select"
-                value={botDifficulty} 
-                onChange={(e) => setBotDifficulty(e.target.value as BotDifficulty)}
-              >
-                <option value="easy">Easy</option>
-                <option value="medium">Medium</option>
-                <option value="hard">Hard</option>
-                <option value="expert">Expert</option>
-              </select>
-            </label>
-            <label className="bot-control-label">
-              Bot plays as:
-              <select 
-                className="player-select"
-                value={botPlayer} 
-                onChange={(e) => {
-                  setBotPlayer(e.target.value as Player);
+      <div className="game-layout">
+        {/* Left Sidebar: Controls */}
+        <aside className="left-sidebar">
+          <div className="sidebar-section">
+            <h3 className="sidebar-title">Game Mode</h3>
+            <div className="mode-selector-vertical">
+              <button 
+                className={`mode-btn ${gameMode === 'local' ? 'active' : ''}`}
+                onClick={() => {
+                  setGameMode('local');
                   reset();
                 }}
               >
-                <option value="W">White</option>
-                <option value="B">Black</option>
-              </select>
-            </label>
-            {isBotThinking && <div className="bot-thinking">🤔 Bot is thinking...</div>}
-          </div>
-        )}
-      </div>
-
-      {ui.lastError && (
-        <div className="error-message">
-          ⚠️ {ui.lastError}
-        </div>
-      )}
-
-      <PlayerPanel
-        player="W"
-        pieces={whitePieces}
-        isCurrentTurn={game.turn === 'W'}
-        selectedPiece={selectedPiece}
-        onPieceClick={onReservePieceClick}
-        phase={phase}
-        gameWinner={game.winner}
-      />
-
-      <div className="board-container">
-        <div className="board">
-          {game.board.map((cell, idx) => {
-            const actionsHere = destinations[idx];
-            const highlight = actionsHere && actionsHere.length > 0;
-            const isCapture = highlight && actionsHere.some((a) => a.kind === 'CAPTURE');
-            const row = Math.floor(idx / 4);
-            const col = idx % 4;
-
-            return (
-              <button
-                key={idx}
-                onClick={() => onSquareClick(idx)}
-                className={`square ${highlight ? 'highlighted' : ''} ${isCapture ? 'capture' : ''}`}
-                data-row={row}
-                data-col={col}
-                title={highlight ? actionsHere.map((a) => a.kind).join(', ') : ''}
-              >
-                {cell && (
-                  <div className={`board-piece player-${game.pieces[cell].owner.toLowerCase()}`}>
-                    {getPieceSymbol(game.pieces[cell].type, game.pieces[cell].owner)}
-                  </div>
-                )}
+                👥 2 Players
               </button>
-            );
-          })}
-        </div>
-      </div>
+              <button 
+                className={`mode-btn ${gameMode === 'vs-bot' ? 'active' : ''}`}
+                onClick={() => {
+                  setGameMode('vs-bot');
+                  reset();
+                }}
+              >
+                🤖 vs Bot
+              </button>
+            </div>
 
-      <PlayerPanel
-        player="B"
-        pieces={blackPieces}
-        isCurrentTurn={game.turn === 'B'}
-        selectedPiece={selectedPiece}
-        onPieceClick={onReservePieceClick}
-        phase={phase}
-        gameWinner={game.winner}
-      />
+            {gameMode === 'vs-bot' && (
+              <div className="bot-controls-vertical">
+                <label className="bot-control-label">
+                  Difficulty:
+                  <select 
+                    className="difficulty-select"
+                    value={botDifficulty} 
+                    onChange={(e) => setBotDifficulty(e.target.value as BotDifficulty)}
+                  >
+                    <option value="easy">Easy</option>
+                    <option value="medium">Medium</option>
+                    <option value="hard">Hard</option>
+                    <option value="expert">Expert</option>
+                  </select>
+                </label>
+                <label className="bot-control-label">
+                  Bot plays as:
+                  <select 
+                    className="player-select"
+                    value={botPlayer} 
+                    onChange={(e) => {
+                      setBotPlayer(e.target.value as Player);
+                      reset();
+                    }}
+                  >
+                    <option value="W">White</option>
+                    <option value="B">Black</option>
+                  </select>
+                </label>
+                {isBotThinking && <div className="bot-thinking">🤔 Thinking...</div>}
+              </div>
+            )}
+          </div>
 
-      <div className="instructions">
-        {selectedPiece ? (
-          <p>
-            ✓ <strong>{selectedPiece}</strong> selected - Click a highlighted square to place/move
-            {' | '}
-            <button className="link-button" onClick={() => dispatch({ type: 'CANCEL_SELECTION' })}>
-              Click here or the same piece to unselect
+          <div className="sidebar-section">
+            <h3 className="sidebar-title">Score</h3>
+            <div className="score-tracker-vertical" title="Click to reset score" onClick={resetScore}>
+              <div className="score-item-vertical">
+                <span className="score-icon">⚪</span>
+                <span className="score-label">White</span>
+                <span className="score-value">{score.white}</span>
+              </div>
+              <div className="score-item-vertical">
+                <span className="score-icon">⚫</span>
+                <span className="score-label">Black</span>
+                <span className="score-value">{score.black}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="sidebar-section">
+            <h3 className="sidebar-title">Status</h3>
+            <div className="status-info">
+              <div className="phase-indicator">{phaseDisplay}</div>
+              {game.winner ? (
+                <div className="winner-announcement">
+                  🎉 {game.winner === 'W' ? 'White' : 'Black'} Wins!
+                </div>
+              ) : (
+                <div className="current-turn">
+                  Turn: {game.turn === 'W' ? '⚪ White' : '⚫ Black'}
+                </div>
+              )}
+            </div>
+            <button className="btn-primary btn-full" onClick={reset}>
+              New Game
             </button>
-          </p>
-        ) : phase === 'PLACEMENT_ONLY' ? (
-          <p>📍 Select a piece above, then click an empty square to place it</p>
-        ) : (
-          <p>🎯 Select a piece to place/respawn, or click a piece on the board to move/capture</p>
-        )}
+          </div>
+        </aside>
+
+        {/* Center: Board Area */}
+        <main className="board-area">
+          {ui.lastError && (
+            <div className="error-message">
+              ⚠️ {ui.lastError}
+            </div>
+          )}
+
+          <PlayerPanel
+            player="W"
+            pieces={whitePieces}
+            isCurrentTurn={game.turn === 'W'}
+            selectedPiece={selectedPiece}
+            onPieceClick={onReservePieceClick}
+            phase={phase}
+            gameWinner={game.winner}
+          />
+
+          <div className="board-container">
+            <div className={`board ${isInReplayMode ? 'replay-mode' : ''}`}>
+              {displayedGame.board.map((cell, idx) => {
+                const actionsHere = destinations[idx];
+                const highlight = !isInReplayMode && actionsHere && actionsHere.length > 0;
+                const isCapture = highlight && actionsHere.some((a) => a.kind === 'CAPTURE');
+                const row = Math.floor(idx / 4);
+                const col = idx % 4;
+
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => !isInReplayMode && onSquareClick(idx)}
+                    className={`square ${highlight ? 'highlighted' : ''} ${isCapture ? 'capture' : ''}`}
+                    data-row={row}
+                    data-col={col}
+                    title={highlight ? actionsHere.map((a) => a.kind).join(', ') : ''}
+                    disabled={isInReplayMode}
+                  >
+                    {cell && (
+                      <div className={`board-piece player-${displayedGame.pieces[cell].owner.toLowerCase()}`}>
+                        {getPieceSymbol(displayedGame.pieces[cell].type, displayedGame.pieces[cell].owner)}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <PlayerPanel
+            player="B"
+            pieces={blackPieces}
+            isCurrentTurn={game.turn === 'B'}
+            selectedPiece={selectedPiece}
+            onPieceClick={onReservePieceClick}
+            phase={phase}
+            gameWinner={game.winner}
+          />
+
+          <div className="instructions">
+            {selectedPiece ? (
+              <p>
+                ✓ <strong>{selectedPiece}</strong> selected - Click a highlighted square
+                {' | '}
+                <button className="link-button" onClick={() => dispatch({ type: 'CANCEL_SELECTION' })}>
+                  Unselect
+                </button>
+              </p>
+            ) : phase === 'PLACEMENT_ONLY' ? (
+              <p>📍 Select a piece, then click an empty square</p>
+            ) : (
+              <p>🎯 Select a piece to place/move/capture</p>
+            )}
+          </div>
+        </main>
+
+        {/* Right Sidebar: History */}
+        <aside className="right-sidebar">
+          <MoveHistory 
+            history={game.moveHistory}
+            viewingMoveIndex={viewingMoveIndex}
+            gameEnded={game.winner !== null}
+            onNavigatePrevious={goToPreviousMove}
+            onNavigateNext={goToNextMove}
+            onGoToMove={goToMove}
+            onReturnToLive={returnToLive}
+          />
+        </aside>
       </div>
     </div>
   );
