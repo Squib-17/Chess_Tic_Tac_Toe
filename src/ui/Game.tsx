@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import Confetti from 'react-confetti';
-import type { Action, GameState, PieceId, Piece } from '../engine/chess-ttt-engine';
+import type { Action, GameState, PieceId, Piece, Player } from '../engine/chess-ttt-engine';
 import {
   applyAction,
   getDestinationsForPiece,
   getInitialState,
   getPhase,
 } from '../engine/chess-ttt-engine';
+import { getBotMove } from '../ai/bot-controller';
+import type { BotDifficulty } from '../ai/types';
 
 type UIState = {
   selectedReserve: PieceId | null;
@@ -120,10 +122,17 @@ function PlayerPanel({
   );
 }
 
+type GameMode = 'local' | 'vs-bot';
+
 export function Game() {
   const [game, setGame] = useState<GameState>(() => getInitialState('W'));
   const [score, setScore] = useState({ white: 0, black: 0 });
   const [showConfetti, setShowConfetti] = useState(false);
+  const [showWinnerOverlay, setShowWinnerOverlay] = useState(false);
+  const [gameMode, setGameMode] = useState<GameMode>('local');
+  const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>('medium');
+  const [botPlayer, setBotPlayer] = useState<Player>('B');
+  const [isBotThinking, setIsBotThinking] = useState(false);
   const [ui, dispatch] = useReducer(uiReducer, {
     selectedReserve: null,
     selectedFrom: null,
@@ -149,6 +158,7 @@ export function Game() {
         black: prev.black + (game.winner === 'B' ? 1 : 0),
       }));
       setShowConfetti(true);
+      setShowWinnerOverlay(true); // Show overlay immediately
       previousWinnerRef.current = game.winner;
     }
     
@@ -156,21 +166,46 @@ export function Game() {
     if (!game.winner) {
       previousWinnerRef.current = null;
       setShowConfetti(false);
+      setShowWinnerOverlay(false);
     }
   }, [game.winner]);
+
+  // Bot move execution
+  useEffect(() => {
+    if (gameMode === 'vs-bot' && game.turn === botPlayer && !game.winner && !isBotThinking) {
+      setIsBotThinking(true);
+      dispatch({ type: 'CLEAR_SELECTIONS' });
+
+      const executeBotMove = async () => {
+        try {
+          const action = await getBotMove(game, botDifficulty);
+          const next = applyAction(game, action);
+          setGame(next);
+        } catch (error) {
+          console.error('Bot move failed:', error);
+        } finally {
+          setIsBotThinking(false);
+        }
+      };
+
+      executeBotMove();
+    }
+  }, [game, gameMode, botPlayer, botDifficulty, isBotThinking]);
 
   function tryApply(action: Action) {
     try {
       const next = applyAction(game, action);
       setGame(next);
       dispatch({ type: 'CLEAR_SELECTIONS' });
-    } catch (e: any) {
-      dispatch({ type: 'SET_ERROR', msg: e?.message ?? 'Invalid action' });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Invalid action';
+      dispatch({ type: 'SET_ERROR', msg: message });
     }
   }
 
   function onSquareClick(idx: number) {
     if (game.winner) return;
+    if (gameMode === 'vs-bot' && game.turn === botPlayer) return; // Prevent human input during bot's turn
 
     const occ = game.board[idx];
 
@@ -223,6 +258,7 @@ export function Game() {
   // Placement/respawn selection (piece first -> square second)
   function onReservePieceClick(pieceId: PieceId) {
     if (game.winner) return;
+    if (gameMode === 'vs-bot' && game.turn === botPlayer) return; // Prevent human input during bot's turn
 
     const p = game.pieces[pieceId];
     if (p.owner !== game.turn) return;
@@ -248,6 +284,9 @@ export function Game() {
   function reset() {
     setGame(getInitialState('W'));
     dispatch({ type: 'CLEAR_SELECTIONS' });
+    setIsBotThinking(false);
+    setShowWinnerOverlay(false);
+    setShowConfetti(false);
   }
 
   function resetScore() {
@@ -276,9 +315,9 @@ export function Game() {
     <div className="game-container">
       {showConfetti && <Confetti recycle={false} numberOfPieces={500} />}
       
-      {game.winner && (
-        <div className="winner-overlay" onClick={reset}>
-          <div className="winner-modal">
+      {game.winner && showWinnerOverlay && (
+        <div className="winner-overlay" onClick={() => setShowWinnerOverlay(false)}>
+          <div className="winner-modal" onClick={(e) => e.stopPropagation()}>
             <div className="winner-icon">
               {game.winner === 'W' ? '⚪' : '⚫'}
             </div>
@@ -289,9 +328,9 @@ export function Game() {
               Score: {game.winner === 'W' ? score.white : score.black}
             </div>
             <button className="play-again-btn" onClick={reset}>
-              Play Again
+              New Game
             </button>
-            <p className="click-hint">Click anywhere to continue</p>
+            <p className="click-hint">Click outside to view final position</p>
           </div>
         </div>
       )}
@@ -325,6 +364,62 @@ export function Game() {
             New Game
           </button>
         </div>
+      </div>
+
+      <div className="game-mode-controls">
+        <div className="mode-selector">
+          <button 
+            className={`mode-btn ${gameMode === 'local' ? 'active' : ''}`}
+            onClick={() => {
+              setGameMode('local');
+              reset();
+            }}
+          >
+            👥 2 Players
+          </button>
+          <button 
+            className={`mode-btn ${gameMode === 'vs-bot' ? 'active' : ''}`}
+            onClick={() => {
+              setGameMode('vs-bot');
+              reset();
+            }}
+          >
+            🤖 vs Bot
+          </button>
+        </div>
+
+        {gameMode === 'vs-bot' && (
+          <div className="bot-controls">
+            <label className="bot-control-label">
+              Difficulty:
+              <select 
+                className="difficulty-select"
+                value={botDifficulty} 
+                onChange={(e) => setBotDifficulty(e.target.value as BotDifficulty)}
+              >
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+                <option value="expert">Expert</option>
+              </select>
+            </label>
+            <label className="bot-control-label">
+              Bot plays as:
+              <select 
+                className="player-select"
+                value={botPlayer} 
+                onChange={(e) => {
+                  setBotPlayer(e.target.value as Player);
+                  reset();
+                }}
+              >
+                <option value="W">White</option>
+                <option value="B">Black</option>
+              </select>
+            </label>
+            {isBotThinking && <div className="bot-thinking">🤔 Bot is thinking...</div>}
+          </div>
+        )}
       </div>
 
       {ui.lastError && (

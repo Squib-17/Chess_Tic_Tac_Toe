@@ -62,7 +62,7 @@ const WIN_LINES: number[][] = [
   [3, 6, 9, 12],
 ];
 
-function assert(condition: any, msg: string): asserts condition {
+function assert(condition: unknown, msg: string): asserts condition {
   if (!condition) throw new Error(msg);
 }
 
@@ -395,7 +395,7 @@ function actionEquals(a: Action, b: Action): boolean {
 
 function cloneState(state: GameState): GameState {
   // shallow copy board; deep copy pieces (small, only 8)
-  const pieces: Record<PieceId, Piece> = {} as any;
+  const pieces = {} as Record<PieceId, Piece>;
   for (const [id, p] of Object.entries(state.pieces) as [PieceId, Piece][]) {
     pieces[id] = { ...p };
   }
