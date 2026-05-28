@@ -53,10 +53,12 @@ export type GameState = {
   moveHistory: MoveHistoryEntry[]; // Track all moves for replay/analysis
 };
 
-const SIZE = 4;
-const BOARD_LEN = 16;
+export const BOARD_SIZE = 4;
+export const BOARD_LEN = BOARD_SIZE * BOARD_SIZE;
+export const CENTER_SQUARES: number[] = [5, 6, 9, 10];
+export const EDGE_SQUARES: number[] = [0, 3, 12, 15];
 
-const WIN_LINES: number[][] = [
+export const WIN_LINES: number[][] = [
   // Rows
   [0, 1, 2, 3],
   [4, 5, 6, 7],
@@ -82,13 +84,19 @@ function phaseFromPly(ply: number): Phase {
 }
 
 function rcToIdx(r: number, c: number): number {
-  return r * SIZE + c;
+  return r * BOARD_SIZE + c;
 }
 function idxToRC(idx: number): { r: number; c: number } {
-  return { r: Math.floor(idx / SIZE), c: idx % SIZE };
+  return { r: Math.floor(idx / BOARD_SIZE), c: idx % BOARD_SIZE };
 }
 function inBounds(r: number, c: number): boolean {
-  return r >= 0 && r < SIZE && c >= 0 && c < SIZE;
+  return r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE;
+}
+
+export function positionToNotation(pos: number): string {
+  const row = Math.floor(pos / BOARD_SIZE);
+  const col = pos % BOARD_SIZE;
+  return `${String.fromCharCode(65 + col)}${BOARD_SIZE - row}`;
 }
 
 function other(player: Player): Player {
@@ -561,7 +569,7 @@ export function applyAction(state: GameState, action: Action): GameState {
   return next;
 }
 
-export function getPhase(ply: number) {
+export function getPhase(ply: number): Phase {
   return ply <= 6 ? 'PLACEMENT_ONLY' : 'HYBRID';
 }
 

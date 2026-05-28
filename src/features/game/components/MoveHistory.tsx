@@ -1,4 +1,6 @@
-import type { MoveHistoryEntry, PieceType } from '../engine/chess-ttt-engine';
+import type { MoveHistoryEntry } from '../../../domain/game-engine/chess-ttt-engine';
+import { formatMove } from '../utils/display';
+import { Button } from './ui';
 
 type MoveHistoryProps = {
   history: MoveHistoryEntry[];
@@ -9,71 +11,6 @@ type MoveHistoryProps = {
   onGoToMove: (index: number) => void;
   onReturnToLive: () => void;
 };
-
-function getPieceName(type: PieceType): string {
-  const names = {
-    P: 'Pawn',
-    N: 'Knight',
-    B: 'Bishop',
-    R: 'Rook',
-  };
-  return names[type];
-}
-
-function getPieceSymbol(type: PieceType, owner: 'W' | 'B'): string {
-  const symbols = {
-    W: { P: '♙', N: '♘', B: '♗', R: '♖' },
-    B: { P: '♟', N: '♞', B: '♝', R: '♜' },
-  };
-  return symbols[owner][type];
-}
-
-function positionToNotation(pos: number): string {
-  const row = Math.floor(pos / 4);
-  const col = pos % 4;
-  const colLetter = String.fromCharCode(65 + col); // A, B, C, D
-  const rowNumber = 4 - row; // 4, 3, 2, 1 (from top to bottom)
-  return `${colLetter}${rowNumber}`;
-}
-
-function formatMove(entry: MoveHistoryEntry): string {
-  const { action, fromPos, toPos, capturedPiece } = entry;
-  const piece = action.pieceId;
-  const owner = piece[0] as 'W' | 'B';
-  const type = piece[2] as PieceType;
-  const symbol = getPieceSymbol(type, owner);
-  const pieceName = getPieceName(type);
-  
-  const toNotation = positionToNotation(toPos);
-
-  switch (action.kind) {
-    case 'PLACE':
-      return `${symbol} ${pieceName} → ${toNotation}`;
-    
-    case 'RESPAWN':
-      return `${symbol} ${pieceName} respawned → ${toNotation}`;
-    
-    case 'MOVE':
-      if (fromPos !== undefined) {
-        const fromNotation = positionToNotation(fromPos);
-        return `${symbol} ${pieceName} ${fromNotation} → ${toNotation}`;
-      }
-      return `${symbol} ${pieceName} → ${toNotation}`;
-    
-    case 'CAPTURE':
-      if (fromPos !== undefined && capturedPiece) {
-        const fromNotation = positionToNotation(fromPos);
-        const capturedType = capturedPiece[2] as PieceType;
-        const capturedOwner = capturedPiece[0] as 'W' | 'B';
-        const capturedSymbol = getPieceSymbol(capturedType, capturedOwner);
-        return `${symbol} ${pieceName} ${fromNotation} × ${capturedSymbol} ${toNotation}`;
-      }
-      return `${symbol} ${pieceName} captures → ${toNotation}`;
-    
-    default:
-      return `Move to ${toNotation}`;
-  }
-}
 
 export function MoveHistory({ 
   history, 
@@ -109,50 +46,60 @@ export function MoveHistory({
       </h3>
       <div className="move-history-list">
         {history.map((entry, index) => (
-          <div
+          <button
             key={index}
             className={`move-history-entry ${entry.player === 'W' ? 'white-move' : 'black-move'} ${
               viewingMoveIndex === index ? 'viewing' : ''
             } ${gameEnded ? 'clickable' : ''}`}
             onClick={() => gameEnded && onGoToMove(index)}
+            disabled={!gameEnded}
+            type="button"
             title={gameEnded ? 'Click to view this position' : ''}
+            aria-current={viewingMoveIndex === index ? 'step' : undefined}
+            aria-label={`Move ${entry.ply}: ${formatMove(entry)}`}
           >
             <span className="move-number">{entry.ply}.</span>
-            <span className="move-player">
+            <span className="move-player" aria-hidden="true">
               {entry.player === 'W' ? '⚪' : '⚫'}
             </span>
             <span className="move-notation">{formatMove(entry)}</span>
-          </div>
+          </button>
         ))}
       </div>
 
       {gameEnded && (
         <div className="move-history-controls">
-          <button
+          <Button
             className="nav-btn"
             onClick={onNavigatePrevious}
             disabled={!canGoPrevious}
             title="Previous move"
+            variant="secondary"
+            size="sm"
           >
             ◀ Previous
-          </button>
+          </Button>
           {isViewingHistory && (
-            <button
+            <Button
               className="nav-btn live-btn"
               onClick={onReturnToLive}
               title="Return to final position"
+              variant="primary"
+              size="sm"
             >
               ⏭ Live
-            </button>
+            </Button>
           )}
-          <button
+          <Button
             className="nav-btn"
             onClick={onNavigateNext}
             disabled={!canGoNext}
             title="Next move"
+            variant="secondary"
+            size="sm"
           >
             Next ▶
-          </button>
+          </Button>
         </div>
       )}
     </div>

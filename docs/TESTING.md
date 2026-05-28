@@ -250,8 +250,8 @@ Test in:
 
 ## Known Issues / Future Improvements
 
-1. No move history - players can't review past moves
-2. No undo function - mistakes are permanent
-3. No draw condition - games can theoretically go on forever
-4. No move timer - players can take unlimited time
-5. No AI opponent - only local 2-player
+1. No undo function - mistakes are permanent
+2. No draw condition - games can theoretically go on forever
+3. No move timer - players can take unlimited time
+4. No persisted settings or saved games
+5. No online multiplayer

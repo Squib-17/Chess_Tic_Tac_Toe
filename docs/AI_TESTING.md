@@ -174,7 +174,7 @@ Expected results:
 ## Architecture Summary
 
 ```
-src/ai/
+src/features/ai/
 ├── types.ts              - Type definitions and configs
 ├── evaluator.ts          - Position evaluation functions
 ├── rule-based-bot.ts     - Easy/Medium strategies

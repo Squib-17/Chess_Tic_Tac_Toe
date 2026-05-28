@@ -1,7 +1,8 @@
 // Bot Controller - Main entry point for AI moves
 // Routes to appropriate strategy based on difficulty level
 
-import type { GameState, Action } from '../engine/chess-ttt-engine';
+import type { GameState, Action } from '../../domain/game-engine/chess-ttt-engine';
+import { generateLegalActions } from '../../domain/game-engine/chess-ttt-engine';
 import type { BotDifficulty } from './types';
 import { BOT_CONFIGS } from './types';
 import { getEasyMove, getMediumMove } from './rule-based-bot';
@@ -18,7 +19,11 @@ import { getHardMove, getExpertMove } from './minimax-bot';
 export async function getBotMove(
   state: GameState,
   difficulty: BotDifficulty
-): Promise<Action> {
+): Promise<Action | null> {
+  if (state.winner || generateLegalActions(state).length === 0) {
+    return null;
+  }
+
   const config = BOT_CONFIGS[difficulty];
   
   // Calculate the move (synchronous)
@@ -67,7 +72,11 @@ export async function getBotMove(
 export function getBotMoveSync(
   state: GameState,
   difficulty: BotDifficulty
-): Action {
+): Action | null {
+  if (state.winner || generateLegalActions(state).length === 0) {
+    return null;
+  }
+
   switch (difficulty) {
     case 'easy':
       return getEasyMove(state);
@@ -93,5 +102,5 @@ export function getEstimatedThinkingTime(difficulty: BotDifficulty): number {
  * Check if bot can make a move (has legal actions)
  */
 export function canBotMove(state: GameState): boolean {
-  return !state.winner;
+  return !state.winner && generateLegalActions(state).length > 0;
 }

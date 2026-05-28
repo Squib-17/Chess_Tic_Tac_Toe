@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "strict": true,
+    "types": ["node"]
+  },
+  "include": [
+    "server/index.ts",
+    "server/multiplayer-server.ts",
+    "server/room-store.ts",
+    "src/domain/game-engine/chess-ttt-engine.ts",
+    "src/shared/session.ts"
+  ]
+}

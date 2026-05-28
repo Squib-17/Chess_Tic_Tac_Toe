@@ -1,73 +1,77 @@
-# React + TypeScript + Vite
+# Chess Tic-Tac-Toe
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A Vite + React + TypeScript implementation of Chess Tic-Tac-Toe: a 4x4 tactical game where each player uses a pawn, knight, bishop, and rook to make four in a row.
 
-Currently, two official plugins are available:
+## Gameplay
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Players place three pieces each during the first six plies.
+- From ply seven onward, players can place remaining pieces, move on-board pieces, capture, or respawn captured pieces.
+- Standard chess movement applies on the 4x4 board, with pawns moving away from their owner and reversing after reaching the far edge.
+- A player wins immediately by forming any row, column, or diagonal of four owned pieces.
+- Local two-player mode, four AI difficulties, and local WebSocket room play are available.
 
-## React Compiler
+## Scripts
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
+npm run dev:server
+npm run dev:all
+npm run lint
+npm test
+npm run check:server
+npm run build
+npm run preview
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Project Structure
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```text
+src/
+  domain/game-engine/   Pure rules engine, board constants, notation, and engine tests
+  features/ai/          Bot controller, rule-based AI, minimax AI, evaluator, and AI tests
+  features/game/        React game screen, UI components, hooks, display helpers, and UI tests
+  shared/               Multiplayer session and wire-protocol types
+  test/                 Test setup
+server/                 Local authoritative WebSocket multiplayer server
+docs/                   PRD and manual testing guides
 ```
+
+## Local Multiplayer
+
+Run both the client and server:
+
+```bash
+npm run dev:all
+```
+
+The client uses `ws://localhost:8787` by default. To point at another server, set `VITE_MULTIPLAYER_URL`.
+
+The first multiplayer version supports room codes, White/Black assignment, spectators, server-side move validation, disconnect state, and in-memory rooms. It does not include accounts, public lobbies, or hosted persistence yet.
+
+## Quality Gates
+
+The repo is expected to pass:
+
+```bash
+npm run lint
+npm test
+npm run check:server
+npm run build
+npm audit --audit-level=moderate
+```
+
+Automated tests cover core engine behavior, bot move selection, winner handling, accessibility-oriented UI flows, and stale bot move cancellation after reset.
+
+## Documentation
+
+- [Changelog](CHANGELOG.md)
+- [Testing guide](docs/TESTING.md)
+- [AI testing guide](docs/AI_TESTING.md)
+- [Movement tests](docs/MOVEMENT_TESTS.md)
+- [Multiplayer architecture](docs/MULTIPLAYER.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Decisions](docs/DECISIONS.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Next phase](docs/NEXT_PHASE.md)
+- [Product requirements](docs/chess_tic_tac_toe_prd.md)

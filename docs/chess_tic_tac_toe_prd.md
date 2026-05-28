@@ -11,7 +11,7 @@
 
 Chess Tic-Tac-Toe is a turn-based, two-player abstract strategy game that blends chess-style piece movement with a tic-tac-toe–style win condition. The game is designed to be fast, tactical, and replayable while remaining simple enough for casual players.
 
-The MVP focuses on **local two-player (hot-seat) gameplay** with a clear ruleset and deterministic logic, forming a foundation for future AI and online multiplayer extensions.
+The current implementation supports **local two-player (hot-seat) gameplay**, a **single-player bot mode**, move history, and replay after game end, with deterministic rules forming a foundation for future online multiplayer extensions.
 
 ---
 
@@ -23,11 +23,10 @@ The MVP focuses on **local two-player (hot-seat) gameplay** with a clear ruleset
 - Enable fast iteration and playtesting
 - Keep UI simple but intuitive
 
-### Non-Goals (MVP)
-- AI / Bot opponent
+### Non-Goals (Current App)
 - Online multiplayer
 - Timers, rankings, or matchmaking
-- Animations, sound, or advanced visuals
+- Sound or advanced visual effects beyond the current interface polish
 
 ---
 
@@ -370,12 +369,11 @@ Only one selection (piece or square) is active at a time.
 ### Known Limitations & Future Improvements
 
 **Current Limitations:**
-- No move history/undo
+- No undo
 - No save/load game state
-- No AI opponent
 - No online multiplayer
 - No move timer
-- No replay functionality
+- Replay is available only after game end
 
 **Potential Rule Clarifications Needed:**
 - What happens if both players repeatedly move pieces without progress?
@@ -388,4 +386,3 @@ Only one selection (piece or square) is active at a time.
 
 **PRD Status:** Locked (v1.1)  
 **Ready for:** Playtesting, iteration, and feature expansion
-

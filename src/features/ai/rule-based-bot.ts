@@ -1,8 +1,12 @@
 // Rule-based AI strategy for Chess Tic-Tac-Toe
 // Implements Easy and Medium difficulty levels using heuristics
 
-import type { GameState, Action } from '../engine/chess-ttt-engine';
-import { generateLegalActions } from '../engine/chess-ttt-engine';
+import type { GameState, Action } from '../../domain/game-engine/chess-ttt-engine';
+import {
+  CENTER_SQUARES,
+  WIN_LINES,
+  generateLegalActions,
+} from '../../domain/game-engine/chess-ttt-engine';
 import {
   findWinningMove,
   findBlockingMove,
@@ -116,19 +120,6 @@ function findOpponentThreatBlockingMove(state: GameState): Action | null {
  * Check if an action would block opponent's threat
  */
 function wouldBlockThreat(state: GameState, action: Action, opp: 'W' | 'B'): boolean {
-  const WIN_LINES = [
-    [0, 1, 2, 3],
-    [4, 5, 6, 7],
-    [8, 9, 10, 11],
-    [12, 13, 14, 15],
-    [0, 4, 8, 12],
-    [1, 5, 9, 13],
-    [2, 6, 10, 14],
-    [3, 7, 11, 15],
-    [0, 5, 10, 15],
-    [3, 6, 9, 12],
-  ];
-
   for (const line of WIN_LINES) {
     if (!line.includes(action.to)) continue;
 
@@ -160,7 +151,7 @@ function selectStrategicMove(state: GameState, actions: Action[]): Action {
   // Phase-specific strategy
   if (state.ply <= 6) {
     // Placement phase: prefer center squares
-    return selectPlacementPhaseMove(state, actions);
+    return selectPlacementPhaseMove(actions);
   } else {
     // Hybrid phase: prefer moves that improve position
     return selectHybridPhaseMove(state, actions);
@@ -170,8 +161,7 @@ function selectStrategicMove(state: GameState, actions: Action[]): Action {
 /**
  * Strategic move selection for placement phase (plies 1-6)
  */
-function selectPlacementPhaseMove(state: GameState, actions: Action[]): Action {
-  const CENTER_SQUARES = [5, 6, 9, 10];
+function selectPlacementPhaseMove(actions: Action[]): Action {
   const INNER_SQUARES = [1, 2, 4, 7, 8, 11, 13, 14];
 
   // Strongly prefer center squares
@@ -207,7 +197,6 @@ function selectHybridPhaseMove(state: GameState, actions: Action[]): Action {
     }
 
     // Center squares are good
-    const CENTER_SQUARES = [5, 6, 9, 10];
     if (CENTER_SQUARES.includes(action.to)) {
       score += 15;
     }

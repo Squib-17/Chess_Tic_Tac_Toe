@@ -1,8 +1,12 @@
 // Minimax AI strategy with alpha-beta pruning
 // Implements Hard and Expert difficulty levels
 
-import type { GameState, Action, Player } from '../engine/chess-ttt-engine';
-import { generateLegalActions, applyAction } from '../engine/chess-ttt-engine';
+import type { GameState, Action, Player } from '../../domain/game-engine/chess-ttt-engine';
+import {
+  CENTER_SQUARES,
+  applyAction,
+  generateLegalActions,
+} from '../../domain/game-engine/chess-ttt-engine';
 import { evaluatePosition, findWinningMove } from './evaluator';
 
 interface ScoredAction {
@@ -165,7 +169,6 @@ function scoreMove(state: GameState, action: Action): number {
   }
 
   // Center squares are strategic
-  const CENTER_SQUARES = [5, 6, 9, 10];
   if (CENTER_SQUARES.includes(action.to)) {
     score += 20;
   }

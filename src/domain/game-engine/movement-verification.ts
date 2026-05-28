@@ -7,12 +7,15 @@
  * runAllMovementTests()
  */
 
-import { getInitialState, applyAction, generateLegalActions } from './chess-ttt-engine';
+import {
+  applyAction,
+  generateLegalActions,
+  getInitialState,
+  positionToNotation,
+} from './chess-ttt-engine';
 
 function posToNotation(pos: number): string {
-  const row = Math.floor(pos / 4);
-  const col = pos % 4;
-  return `${String.fromCharCode(65 + col)}${4 - row}`;
+  return positionToNotation(pos);
 }
 
 export function testRookMovement(): boolean {
