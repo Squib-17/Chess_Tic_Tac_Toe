@@ -50,6 +50,7 @@ For production:
 
 - Deploy the Vite build output (`dist/`) as a static site. `vercel.json` is included for Vercel with security headers and SPA routing.
 - Deploy the WebSocket server with `npm run start:server` on any Node host (see `render.yaml` for Render).
+- **Render settings:** Build Command = `npm ci`, Start Command = `npm run start:server` (do not use the start command as the build command).
 - Set `VITE_MULTIPLAYER_URL=wss://your-server.example.com` at frontend build time.
 - Set `HOST=0.0.0.0`, `PORT`, and `ALLOWED_ORIGINS=https://your-frontend.example.com` on the server runtime.
 - Health checks are served at `GET /health` on the same port as the WebSocket endpoint.
