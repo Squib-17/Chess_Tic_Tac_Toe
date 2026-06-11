@@ -1,87 +1,32 @@
 # Chess Tic-Tac-Toe
 
-A Vite + React + TypeScript implementation of Chess Tic-Tac-Toe: a 4x4 tactical game where each player uses a pawn, knight, bishop, and rook to make four in a row.
+Chess meets tic-tac-toe on a 4×4 board. Each player has a pawn, knight, bishop, and rook. Get four of your pieces in a row — across, down, or diagonally — to win.
 
-## Gameplay
+**Play:** [chess-tic-tac-toe-kappa.vercel.app](https://chess-tic-tac-toe-kappa.vercel.app/)
 
-- Players place three pieces each during the first six plies.
-- From ply seven onward, players can place remaining pieces, move on-board pieces, capture, or respawn captured pieces.
-- Standard chess movement applies on the 4x4 board, with pawns moving away from their owner and reversing after reaching the far edge.
-- A player wins immediately by forming any row, column, or diagonal of four owned pieces.
-- Local two-player mode, four AI difficulties, and local WebSocket room play are available.
+## How to play
 
-## Scripts
+**Opening (first six moves)**  
+Each player places three pieces on empty squares, one at a time.
 
-```bash
-npm install
-npm run dev
-npm run dev:server
-npm run dev:all
-npm run lint
-npm test
-npm run check:server
-npm run build
-npm run preview
-```
+**After that**  
+On your turn you can:
 
-## Project Structure
+- Place a piece you haven’t used yet
+- Move a piece already on the board (standard chess rules on the 4×4 grid)
+- Capture an opponent’s piece
+- Respawn a captured piece onto an empty square
 
-```text
-src/
-  domain/game-engine/   Pure rules engine, board constants, notation, and engine tests
-  features/ai/          Bot controller, rule-based AI, minimax AI, evaluator, and AI tests
-  features/game/        React game screen, UI components, hooks, display helpers, and UI tests
-  shared/               Multiplayer session and wire-protocol types
-  test/                 Test setup
-server/                 Authoritative WebSocket multiplayer server
-```
+**Pawns** move away from your side of the board. When a pawn reaches the far edge, it turns around and moves back.
 
-## Local Multiplayer
+**Winning**  
+Four of your pieces in a row, column, or diagonal wins immediately.
 
-Run both the client and server:
+**Draws**  
+Either player can offer a draw; the other can accept or decline.
 
-```bash
-npm run dev:all
-```
+## Modes
 
-The client uses `ws://localhost:8787` by default. To point at another server, set `VITE_MULTIPLAYER_URL`.
-
-For production:
-
-- Deploy the Vite build output (`dist/`) as a static site. `vercel.json` is included for Vercel with security headers and SPA routing.
-- Deploy the WebSocket server with `npm run start:server` on any Node host (see `render.yaml` for Render).
-- **Render settings:** Build Command = `npm ci`, Start Command = `npm run start:server` (do not use the start command as the build command).
-- Set `VITE_MULTIPLAYER_URL=wss://your-server.example.com` at frontend build time.
-- Set `HOST=0.0.0.0`, `PORT`, and `ALLOWED_ORIGINS=https://your-frontend.example.com` on the server runtime.
-- Health checks are served at `GET /health` on the same port as the WebSocket endpoint.
-
-See `.env.example` for all supported environment variables.
-
-The first multiplayer version supports room codes, White/Black assignment, spectators, server-side move validation, disconnect state, and in-memory rooms. It does not include accounts, public lobbies, or hosted persistence yet.
-
-## Quality Gates
-
-The repo is expected to pass:
-
-```bash
-npm run lint
-npm test
-npm run check:server
-npm run build
-npm audit --audit-level=moderate
-```
-
-Automated tests cover core engine behavior, bot move selection, winner handling, accessibility-oriented UI flows, and stale bot move cancellation after reset.
-
-## Documentation
-
-- [Changelog](CHANGELOG.md)
-- [Testing guide](docs/TESTING.md)
-- [AI testing guide](docs/AI_TESTING.md)
-- [Movement tests](docs/MOVEMENT_TESTS.md)
-- [Multiplayer architecture](docs/MULTIPLAYER.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Decisions](docs/DECISIONS.md)
-- [Roadmap](docs/ROADMAP.md)
-- [Next phase](docs/NEXT_PHASE.md)
-- [Product requirements](docs/chess_tic_tac_toe_prd.md)
+- **Local** — two players on the same device
+- **Bot** — play against the computer (four difficulty levels)
+- **Online** — share a room code with a friend and play over the web

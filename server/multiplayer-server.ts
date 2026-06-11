@@ -45,9 +45,13 @@ export type MultiplayerServerOptions = {
   maxMessagesPerSecond?: number;
 };
 
+function normalizeOrigin(origin: string): string {
+  return origin.trim().replace(/\/+$/, '');
+}
+
 function parseAllowedOrigins(raw: string | undefined): string[] | undefined {
   if (!raw?.trim()) return undefined;
-  return raw.split(',').map((origin) => origin.trim()).filter(Boolean);
+  return raw.split(',').map((origin) => normalizeOrigin(origin)).filter(Boolean);
 }
 
 export function readAllowedOriginsFromEnv(): string[] | undefined {
@@ -57,7 +61,7 @@ export function readAllowedOriginsFromEnv(): string[] | undefined {
 function isOriginAllowed(origin: string | undefined, allowedOrigins: string[] | undefined): boolean {
   if (!allowedOrigins?.length) return true;
   if (!origin) return false;
-  return allowedOrigins.includes(origin);
+  return allowedOrigins.includes(normalizeOrigin(origin));
 }
 
 function isRateLimited(meta: ClientMeta, maxMessagesPerSecond: number, timestamp: number): boolean {
