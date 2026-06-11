@@ -12,8 +12,8 @@ type GameStatusProps = {
 
 export function GameStatus({ phase, ply, turn, winner, onReset }: GameStatusProps) {
   const phaseDisplay = phase === 'PLACEMENT_ONLY'
-    ? `Placement Phase (${ply}/6)`
-    : 'Movement Phase';
+    ? `Place ${ply}/6`
+    : 'Move';
 
   return (
     <section className="sidebar-section" aria-labelledby="status-title">

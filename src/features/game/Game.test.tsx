@@ -32,7 +32,7 @@ describe('Game UI', () => {
     await place(/white pawn/i, /A4, empty, legal/i);
 
     expect(screen.getByRole('gridcell', { name: /A4, White Pawn/i })).toBeInTheDocument();
-    expect(screen.getByText(/Placement Phase \(2\/6\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Place 2\/6/i)).toBeInTheDocument();
   });
 
   it('shows and closes the winner dialog', async () => {
@@ -74,7 +74,7 @@ describe('Game UI', () => {
     resolveStaleMove({ kind: 'PLACE', pieceId: 'W_P', to: 0 });
 
     await waitFor(() => {
-      expect(screen.getByText(/Placement Phase \(1\/6\)/i)).toBeInTheDocument();
+      expect(screen.getByText(/Place 1\/6/i)).toBeInTheDocument();
     });
     expect(screen.getByRole('gridcell', { name: /A4, empty/i })).toBeInTheDocument();
   });

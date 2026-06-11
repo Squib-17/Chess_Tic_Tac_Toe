@@ -18,6 +18,7 @@ type PlayerPanelProps = {
   onPieceClick: (pieceId: PieceId) => void;
   phase: Phase;
   gameWinner: Player | null;
+  displayName?: string;
 };
 
 export function PlayerPanel({
@@ -28,6 +29,7 @@ export function PlayerPanel({
   onPieceClick,
   phase,
   gameWinner,
+  displayName,
 }: PlayerPanelProps) {
   const directionIndicator = player === 'W' ? 'down' : 'up';
 
@@ -38,7 +40,7 @@ export function PlayerPanel({
     >
       <div className="player-header">
         <h3>
-          {getPlayerName(player)} Player
+          {displayName ?? `${getPlayerName(player)} Player`}
           <span aria-hidden="true">{player === 'W' ? '↓' : '↑'}</span>
         </h3>
         {isCurrentTurn && !gameWinner && <span className="turn-indicator">Your Turn</span>}

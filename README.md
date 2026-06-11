@@ -33,8 +33,7 @@ src/
   features/game/        React game screen, UI components, hooks, display helpers, and UI tests
   shared/               Multiplayer session and wire-protocol types
   test/                 Test setup
-server/                 Local authoritative WebSocket multiplayer server
-docs/                   PRD and manual testing guides
+server/                 Authoritative WebSocket multiplayer server
 ```
 
 ## Local Multiplayer
@@ -46,6 +45,16 @@ npm run dev:all
 ```
 
 The client uses `ws://localhost:8787` by default. To point at another server, set `VITE_MULTIPLAYER_URL`.
+
+For production:
+
+- Deploy the Vite build output (`dist/`) as a static site. `vercel.json` is included for Vercel with security headers and SPA routing.
+- Deploy the WebSocket server with `npm run start:server` on any Node host (see `render.yaml` for Render).
+- Set `VITE_MULTIPLAYER_URL=wss://your-server.example.com` at frontend build time.
+- Set `HOST=0.0.0.0`, `PORT`, and `ALLOWED_ORIGINS=https://your-frontend.example.com` on the server runtime.
+- Health checks are served at `GET /health` on the same port as the WebSocket endpoint.
+
+See `.env.example` for all supported environment variables.
 
 The first multiplayer version supports room codes, White/Black assignment, spectators, server-side move validation, disconnect state, and in-memory rooms. It does not include accounts, public lobbies, or hosted persistence yet.
 

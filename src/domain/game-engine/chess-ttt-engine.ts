@@ -50,6 +50,7 @@ export type GameState = {
   turn: Player; // current player to act
   ply: number; // 1-based global move count
   winner: Player | null;
+  isDraw: boolean;
   moveHistory: MoveHistoryEntry[]; // Track all moves for replay/analysis
 };
 
@@ -262,12 +263,22 @@ export function getInitialState(startingPlayer: Player = 'W'): GameState {
     turn: startingPlayer,
     ply: 1,
     winner: null,
+    isDraw: false,
     moveHistory: [],
   };
 }
 
+export function isGameOver(state: GameState): boolean {
+  return state.winner !== null || state.isDraw;
+}
+
+export function declareDraw(state: GameState): GameState {
+  if (isGameOver(state)) return cloneState(state);
+  return { ...cloneState(state), isDraw: true };
+}
+
 export function generateLegalActions(state: GameState): Action[] {
-  if (state.winner) return [];
+  if (state.winner || state.isDraw) return [];
 
   const phase = phaseFromPly(state.ply);
   const actions: Action[] = [];
@@ -344,7 +355,7 @@ export function generateLegalActions(state: GameState): Action[] {
 }
 
 function validateAction(state: GameState, action: Action): void {
-  assert(!state.winner, 'Game already ended');
+  assert(!state.winner && !state.isDraw, 'Game already ended');
   assert(action.to >= 0 && action.to < BOARD_LEN, 'Target out of bounds');
 
   const piece = state.pieces[action.pieceId];
@@ -424,6 +435,7 @@ function cloneState(state: GameState): GameState {
     turn: state.turn,
     ply: state.ply,
     winner: state.winner,
+    isDraw: state.isDraw,
     moveHistory: [...state.moveHistory], // Shallow copy is fine for history
   };
 }
@@ -505,7 +517,7 @@ function capturePiece(
 }
 
 function enforceNoLegalMovesLoss(state: GameState): void {
-  if (state.winner) return;
+  if (isGameOver(state)) return;
   const legals = generateLegalActions(state);
   if (legals.length === 0) {
     state.winner = other(state.turn);

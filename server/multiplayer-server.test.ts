@@ -27,8 +27,8 @@ async function createClient(port: number): Promise<WebSocket> {
 async function createServer(): Promise<{ server: MultiplayerServer; port: number }> {
   const server = startMultiplayerServer({ port: 0 });
   servers.push(server);
-  await new Promise<void>((resolve) => server.wss.once('listening', () => resolve()));
-  const address = server.wss.address();
+  await new Promise<void>((resolve) => server.httpServer.once('listening', () => resolve()));
+  const address = server.httpServer.address();
   if (typeof address === 'string' || address === null) throw new Error('Expected TCP address.');
   return { server, port: address.port };
 }

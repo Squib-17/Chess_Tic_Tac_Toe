@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: chess-ttt-multiplayer
+    runtime: node
+    buildCommand: npm ci
+    startCommand: npm run start:server
+    healthCheckPath: /health
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: NODE_ENV
+        value: production

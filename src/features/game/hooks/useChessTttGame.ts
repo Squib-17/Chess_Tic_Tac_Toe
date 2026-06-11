@@ -9,9 +9,11 @@ import type {
 } from '../../../domain/game-engine/chess-ttt-engine';
 import {
   applyAction,
+  declareDraw,
   getDestinationsForPiece,
   getInitialState,
   getPhase,
+  isGameOver,
 } from '../../../domain/game-engine/chess-ttt-engine';
 import {
   initialUIState,
@@ -27,10 +29,13 @@ export function useChessTttGame() {
   const [showConfetti, setShowConfetti] = useState(false);
   const [showWinnerOverlay, setShowWinnerOverlay] = useState(false);
   const [gameMode, setGameMode] = useState<GameMode>('local');
+  // Track which online round's winner overlay the user has dismissed
+  const [dismissedOnlineRound, setDismissedOnlineRound] = useState(-1);
   const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>('medium');
   const [botPlayer, setBotPlayer] = useState<Player>('B');
   const [isBotThinking, setIsBotThinking] = useState(false);
   const [viewingMoveIndex, setViewingMoveIndex] = useState<number | null>(null);
+  const [localDrawOfferedBy, setLocalDrawOfferedBy] = useState<Player | null>(null);
   const [ui, dispatch] = useReducer(uiReducer, initialUIState);
   const multiplayer = useMultiplayerRoom();
 
@@ -51,8 +56,13 @@ export function useChessTttGame() {
     setShowWinnerOverlay(true);
   }, []);
 
+  const recordDraw = useCallback((next: GameState, previousIsDraw: boolean) => {
+    if (!next.isDraw || previousIsDraw) return;
+    setShowWinnerOverlay(true);
+  }, []);
+
   const displayedGame = useMemo(() => {
-    if (viewingMoveIndex === null || !game.winner) {
+    if (viewingMoveIndex === null || !isGameOver(game)) {
       return game;
     }
 
@@ -79,10 +89,11 @@ export function useChessTttGame() {
     setShowWinnerOverlay(false);
     setShowConfetti(false);
     setViewingMoveIndex(null);
+    setLocalDrawOfferedBy(null);
   }, [gameMode, multiplayer]);
 
   useEffect(() => {
-    if (gameMode !== 'vs-bot' || localGame.turn !== botPlayer || localGame.winner || isBotThinking) {
+    if (gameMode !== 'vs-bot' || localGame.turn !== botPlayer || isGameOver(localGame) || isBotThinking) {
       return;
     }
 
@@ -98,11 +109,12 @@ export function useChessTttGame() {
     getBotMove(localGame, botDifficulty)
       .then((action) => {
         if (botTurnTokenRef.current !== token || !action) return;
-        if (localGame.winner || localGame.turn !== botPlayer) return;
+        if (isGameOver(localGame) || localGame.turn !== botPlayer) return;
 
         const next = applyAction(localGame, action);
         setLocalGame(next);
         recordWinner(next, localGame.winner);
+        recordDraw(next, localGame.isDraw);
       })
       .catch((error: unknown) => {
         console.error('Bot move failed:', error);
@@ -112,7 +124,7 @@ export function useChessTttGame() {
           setIsBotThinking(false);
         }
       });
-  }, [localGame, gameMode, botPlayer, botDifficulty, isBotThinking, recordWinner]);
+  }, [localGame, gameMode, botPlayer, botDifficulty, isBotThinking, recordWinner, recordDraw]);
 
   const submitAction = useCallback((action: Action) => {
     try {
@@ -123,16 +135,67 @@ export function useChessTttGame() {
         const next = applyAction(localGame, action);
         setLocalGame(next);
         recordWinner(next, localGame.winner);
+        recordDraw(next, localGame.isDraw);
       }
       dispatch({ type: 'CLEAR_SELECTIONS' });
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Invalid action';
       dispatch({ type: 'SET_ERROR', msg: message });
     }
-  }, [gameMode, localGame, multiplayer, recordWinner]);
+  }, [gameMode, localGame, multiplayer, recordWinner, recordDraw]);
+
+  const finalizeLocalDraw = useCallback(() => {
+    setLocalGame((prev) => {
+      const next = declareDraw(prev);
+      recordDraw(next, prev.isDraw);
+      return next;
+    });
+    setLocalDrawOfferedBy(null);
+  }, [recordDraw]);
+
+  const drawOfferedBy = gameMode === 'online'
+    ? (multiplayer.session?.drawOfferedBy ?? null)
+    : localDrawOfferedBy;
+
+  const offerDraw = useCallback(() => {
+    if (isGameOver(game)) return;
+
+    if (gameMode === 'online') {
+      if (multiplayer.role !== 'W' && multiplayer.role !== 'B') return;
+      multiplayer.offerDraw();
+      return;
+    }
+
+    if (gameMode === 'vs-bot') {
+      finalizeLocalDraw();
+      return;
+    }
+
+    if (localDrawOfferedBy) return;
+    setLocalDrawOfferedBy(game.turn);
+  }, [game, gameMode, finalizeLocalDraw, localDrawOfferedBy, multiplayer]);
+
+  const acceptDraw = useCallback(() => {
+    if (gameMode === 'online') {
+      multiplayer.acceptDraw();
+      return;
+    }
+
+    if (!localDrawOfferedBy) return;
+    finalizeLocalDraw();
+  }, [finalizeLocalDraw, gameMode, localDrawOfferedBy, multiplayer]);
+
+  const declineDraw = useCallback(() => {
+    if (gameMode === 'online') {
+      multiplayer.declineDraw();
+      return;
+    }
+
+    setLocalDrawOfferedBy(null);
+  }, [gameMode, multiplayer]);
 
   const onSquareClick = useCallback((idx: number) => {
-    if (game.winner || isInReplayMode) return;
+    if (isGameOver(game) || isInReplayMode) return;
     if (gameMode === 'vs-bot' && game.turn === botPlayer) return;
     if (gameMode === 'online' && game.turn !== multiplayer.role) return;
 
@@ -186,7 +249,7 @@ export function useChessTttGame() {
   ]);
 
   const onReservePieceClick = useCallback((pieceId: PieceId) => {
-    if (game.winner || isInReplayMode) return;
+    if (isGameOver(game) || isInReplayMode) return;
     if (gameMode === 'vs-bot' && game.turn === botPlayer) return;
     if (gameMode === 'online' && game.turn !== multiplayer.role) return;
 
@@ -209,20 +272,44 @@ export function useChessTttGame() {
     }
   }, [botPlayer, game, gameMode, isInReplayMode, multiplayer.role, phase, selectedPiece]);
 
+  // For online mode: derive overlay visibility from session state rather than local state,
+  // so the winner overlay appears when the server confirms a winner.
+  const onlineRound = multiplayer.session?.round ?? 0;
+  const onlineWinner = gameMode === 'online' ? (multiplayer.session?.game.winner ?? null) : null;
+  const onlineIsDraw = gameMode === 'online' ? (multiplayer.session?.game.isDraw ?? false) : false;
+  const onlineGameEnded = onlineWinner !== null || onlineIsDraw;
+  const effectiveShowWinnerOverlay = gameMode === 'online'
+    ? (onlineGameEnded && dismissedOnlineRound !== onlineRound)
+    : showWinnerOverlay;
+  const effectiveShowConfetti = gameMode === 'online'
+    ? (onlineWinner !== null && dismissedOnlineRound !== onlineRound)
+    : showConfetti;
+
+  const requestRematch = useCallback(() => {
+    multiplayer.requestRematch();
+    dispatch({ type: 'CLEAR_SELECTIONS' });
+    setViewingMoveIndex(null);
+  }, [multiplayer]);
+
   return {
+    acceptDraw,
     botDifficulty,
     botPlayer,
+    declineDraw,
     destinations,
     dispatch,
     displayedGame,
+    drawOfferedBy,
     game,
     gameMode,
     isBotThinking,
     isInReplayMode,
     multiplayer,
+    offerDraw,
     onReservePieceClick,
     onSquareClick,
     phase,
+    requestRematch,
     reset,
     resetScore: () => setScore({ white: 0, black: 0 }),
     score,
@@ -241,13 +328,20 @@ export function useChessTttGame() {
       setShowWinnerOverlay(false);
       setShowConfetti(false);
       setViewingMoveIndex(null);
+      setLocalDrawOfferedBy(null);
       if (gameMode === 'online' && mode !== 'online') {
         multiplayer.leaveRoom();
       }
     },
-    setShowWinnerOverlay,
-    showConfetti,
-    showWinnerOverlay,
+    setShowWinnerOverlay: (show: boolean) => {
+      if (gameMode === 'online') {
+        if (!show) setDismissedOnlineRound(onlineRound);
+      } else {
+        setShowWinnerOverlay(show);
+      }
+    },
+    showConfetti: effectiveShowConfetti,
+    showWinnerOverlay: effectiveShowWinnerOverlay,
     ui,
     viewingMoveIndex,
     goToPreviousMove: () => {

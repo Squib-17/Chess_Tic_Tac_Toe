@@ -13,14 +13,19 @@ export type MultiplayerStatus = 'idle' | 'connecting' | 'connected' | 'disconnec
 
 const SERVER_URL = import.meta.env.VITE_MULTIPLAYER_URL ?? 'ws://localhost:8787';
 const CLIENT_ID_KEY = 'chess-ttt-client-id';
+const DISPLAY_NAME_KEY = 'chess-ttt-display-name';
+const MAX_NAME_LENGTH = 24;
 
 function getStoredClientId(): ClientId {
   const existing = window.localStorage.getItem(CLIENT_ID_KEY);
   if (existing) return existing;
-
   const next = crypto.randomUUID();
   window.localStorage.setItem(CLIENT_ID_KEY, next);
   return next;
+}
+
+function getStoredDisplayName(): string {
+  return window.localStorage.getItem(DISPLAY_NAME_KEY) ?? '';
 }
 
 export function useMultiplayerRoom() {
@@ -31,6 +36,16 @@ export function useMultiplayerRoom() {
   const [role, setRole] = useState<SessionRole | null>(null);
   const [session, setSession] = useState<PublicGameSession | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [displayName, setDisplayNameState] = useState<string>(getStoredDisplayName);
+
+  // Ref so callbacks always read the latest name without dep-array churn
+  const displayNameRef = useRef(displayName);
+
+  // Read URL param once on mount
+  const pendingAutoJoinCode = useMemo(
+    () => new URLSearchParams(window.location.search).get('room')?.trim().toUpperCase() ?? null,
+    [],
+  );
 
   const send = useCallback((message: ClientMessage) => {
     const socket = socketRef.current;
@@ -38,7 +53,6 @@ export function useMultiplayerRoom() {
       setLastError('Multiplayer server is not connected.');
       return false;
     }
-
     socket.send(JSON.stringify(message));
     return true;
   }, []);
@@ -88,13 +102,25 @@ export function useMultiplayerRoom() {
           setSession(message.session);
           setLastError(null);
           break;
+        case 'rematch_started':
+          setSession(message.session);
+          setLastError(null);
+          break;
+        case 'draw_offered':
+        case 'draw_declined':
+        case 'draw_accepted':
+          setSession(message.session);
+          setLastError(null);
+          break;
         case 'action_rejected':
           if (message.session) setSession(message.session);
           setLastError(message.reason);
           break;
         case 'player_disconnected':
           setSession(message.session);
-          setLastError(`${message.role === 'spectator' ? 'A spectator' : `${message.role} player`} disconnected.`);
+          setLastError(
+            `${message.role === 'spectator' ? 'A spectator' : `${message.role} player`} disconnected.`,
+          );
           break;
         case 'error':
           setLastError(message.message);
@@ -109,13 +135,11 @@ export function useMultiplayerRoom() {
 
   const createRoom = useCallback(() => {
     const socket = connect();
-    socket.addEventListener('open', () => {
-      send({ type: 'create_room', clientId });
-    }, { once: true });
-
-    if (socket.readyState === WebSocket.OPEN) {
-      send({ type: 'create_room', clientId });
-    }
+    const doCreate = () => {
+      send({ type: 'create_room', clientId, displayName: displayNameRef.current || undefined });
+    };
+    socket.addEventListener('open', doCreate, { once: true });
+    if (socket.readyState === WebSocket.OPEN) doCreate();
   }, [clientId, connect, send]);
 
   const joinRoom = useCallback((targetRoomId: string) => {
@@ -126,13 +150,16 @@ export function useMultiplayerRoom() {
     }
 
     const socket = connect();
-    socket.addEventListener('open', () => {
-      send({ type: 'join_room', roomId: normalizedRoomId, clientId });
-    }, { once: true });
-
-    if (socket.readyState === WebSocket.OPEN) {
-      send({ type: 'join_room', roomId: normalizedRoomId, clientId });
-    }
+    const doJoin = () => {
+      send({
+        type: 'join_room',
+        roomId: normalizedRoomId,
+        clientId,
+        displayName: displayNameRef.current || undefined,
+      });
+    };
+    socket.addEventListener('open', doJoin, { once: true });
+    if (socket.readyState === WebSocket.OPEN) doJoin();
   }, [clientId, connect, send]);
 
   const reconnectRoom = useCallback(() => {
@@ -140,14 +167,11 @@ export function useMultiplayerRoom() {
       setLastError('No room to reconnect to.');
       return;
     }
-
     joinRoom(roomId);
   }, [joinRoom, roomId]);
 
   const leaveRoom = useCallback(() => {
-    if (roomId) {
-      send({ type: 'leave_room', roomId });
-    }
+    if (roomId) send({ type: 'leave_room', roomId });
     setRoomId(null);
     setRole(null);
     setSession(null);
@@ -159,8 +183,40 @@ export function useMultiplayerRoom() {
       setLastError('Create or join a room before moving.');
       return false;
     }
-
     return send({ type: 'submit_action', roomId, action });
+  }, [roomId, send]);
+
+  const requestRematch = useCallback(() => {
+    if (!roomId) return;
+    send({ type: 'request_rematch', roomId });
+  }, [roomId, send]);
+
+  const offerDraw = useCallback(() => {
+    if (!roomId) {
+      setLastError('Create or join a room before offering a draw.');
+      return false;
+    }
+    return send({ type: 'offer_draw', roomId });
+  }, [roomId, send]);
+
+  const acceptDraw = useCallback(() => {
+    if (!roomId) return false;
+    return send({ type: 'accept_draw', roomId });
+  }, [roomId, send]);
+
+  const declineDraw = useCallback(() => {
+    if (!roomId) return false;
+    return send({ type: 'decline_draw', roomId });
+  }, [roomId, send]);
+
+  const setDisplayName = useCallback((name: string) => {
+    const normalized = name.trim().slice(0, MAX_NAME_LENGTH);
+    displayNameRef.current = normalized;
+    window.localStorage.setItem(DISPLAY_NAME_KEY, normalized);
+    setDisplayNameState(normalized);
+    if (roomId) {
+      send({ type: 'update_display_name', roomId, displayName: normalized });
+    }
   }, [roomId, send]);
 
   useEffect(() => () => {
@@ -170,13 +226,20 @@ export function useMultiplayerRoom() {
   return {
     clientId,
     createRoom,
+    displayName,
     joinRoom,
     lastError,
     leaveRoom,
+    offerDraw,
+    acceptDraw,
+    declineDraw,
+    pendingAutoJoinCode,
     reconnectRoom,
+    requestRematch,
     role,
     roomId,
     session,
+    setDisplayName,
     status,
     submitNetworkAction,
   };

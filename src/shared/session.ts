@@ -1,5 +1,5 @@
 import type { Action, GameState, Player } from '../domain/game-engine/chess-ttt-engine';
-import { applyAction, getInitialState } from '../domain/game-engine/chess-ttt-engine';
+import { applyAction, declareDraw, getInitialState, isGameOver } from '../domain/game-engine/chess-ttt-engine';
 
 export type RoomId = string;
 export type ClientId = string;
@@ -20,6 +20,7 @@ export type GameSession = {
   game: GameState;
   players: Partial<Record<Player, SessionPlayer>>;
   spectators: SessionPlayer[];
+  drawOfferedBy: Player | null;
   round: number;
   createdAt: number;
   updatedAt: number;
@@ -30,6 +31,7 @@ export type PublicGameSession = {
   game: GameState;
   players: Partial<Record<Player, Omit<SessionPlayer, 'clientId'>>>;
   spectators: Array<Omit<SessionPlayer, 'clientId'>>;
+  drawOfferedBy: Player | null;
   round: number;
   createdAt: number;
   updatedAt: number;
@@ -49,6 +51,9 @@ export type ClientMessage =
   | { type: 'join_room'; roomId: RoomId; clientId?: ClientId; displayName?: string }
   | { type: 'submit_action'; roomId: RoomId; action: Action }
   | { type: 'request_rematch'; roomId: RoomId }
+  | { type: 'offer_draw'; roomId: RoomId }
+  | { type: 'accept_draw'; roomId: RoomId }
+  | { type: 'decline_draw'; roomId: RoomId }
   | { type: 'update_display_name'; roomId: RoomId; displayName: string }
   | { type: 'leave_room'; roomId: RoomId }
   | { type: 'ping' };
@@ -60,6 +65,9 @@ export type ServerMessage =
   | { type: 'action_accepted'; roomId: RoomId; session: PublicGameSession }
   | { type: 'action_rejected'; roomId: RoomId; reason: string; session?: PublicGameSession }
   | { type: 'rematch_started'; roomId: RoomId; session: PublicGameSession }
+  | { type: 'draw_offered'; roomId: RoomId; offeredBy: Player; session: PublicGameSession }
+  | { type: 'draw_declined'; roomId: RoomId; session: PublicGameSession }
+  | { type: 'draw_accepted'; roomId: RoomId; session: PublicGameSession }
   | { type: 'player_disconnected'; roomId: RoomId; role: SessionRole; session: PublicGameSession }
   | { type: 'error'; message: string }
   | { type: 'pong' };
@@ -69,7 +77,11 @@ function now(): number {
 }
 
 export function normalizeDisplayName(displayName: string | undefined, fallback = 'Guest'): string {
-  const normalized = displayName?.trim().replace(/\s+/g, ' ').slice(0, 24);
+  const normalized = displayName
+    ?.trim()
+    .replace(/[<>]/g, '')
+    .replace(/\s+/g, ' ')
+    .slice(0, 24);
   return normalized || fallback;
 }
 
@@ -93,6 +105,7 @@ export function createSession(
       },
     },
     spectators: [],
+    drawOfferedBy: null,
     round: 1,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -259,7 +272,7 @@ export function applySessionAction(
     return { ok: false, session, reason: 'Spectators cannot submit moves.' };
   }
 
-  if (session.game.winner) {
+  if (session.game.winner || session.game.isDraw) {
     return { ok: false, session, reason: 'Game already ended.' };
   }
 
@@ -298,7 +311,7 @@ export function startRematch(
     return { ok: false, session, reason: 'Spectators cannot start rematches.' };
   }
 
-  if (!session.game.winner) {
+  if (!isGameOver(session.game)) {
     return { ok: false, session, reason: 'Finish the current game before starting a rematch.' };
   }
 
@@ -307,7 +320,96 @@ export function startRematch(
     session: {
       ...session,
       game: getInitialState('W'),
+      drawOfferedBy: null,
       round: session.round + 1,
+      updatedAt: timestamp,
+    },
+  };
+}
+
+export function offerDraw(
+  session: GameSession,
+  clientId: ClientId,
+  timestamp = now(),
+): ActionResult {
+  const role = roleForClient(session, clientId);
+
+  if (role !== 'W' && role !== 'B') {
+    return { ok: false, session, reason: 'Only players can offer a draw.' };
+  }
+
+  if (isGameOver(session.game)) {
+    return { ok: false, session, reason: 'Game already ended.' };
+  }
+
+  return {
+    ok: true,
+    session: {
+      ...session,
+      drawOfferedBy: role,
+      updatedAt: timestamp,
+    },
+  };
+}
+
+export function acceptDraw(
+  session: GameSession,
+  clientId: ClientId,
+  timestamp = now(),
+): ActionResult {
+  const role = roleForClient(session, clientId);
+
+  if (role !== 'W' && role !== 'B') {
+    return { ok: false, session, reason: 'Only players can accept a draw.' };
+  }
+
+  if (!session.drawOfferedBy) {
+    return { ok: false, session, reason: 'No draw offer is pending.' };
+  }
+
+  if (session.drawOfferedBy === role) {
+    return { ok: false, session, reason: 'You cannot accept your own draw offer.' };
+  }
+
+  if (isGameOver(session.game)) {
+    return { ok: false, session, reason: 'Game already ended.' };
+  }
+
+  return {
+    ok: true,
+    session: {
+      ...session,
+      game: declareDraw(session.game),
+      drawOfferedBy: null,
+      updatedAt: timestamp,
+    },
+  };
+}
+
+export function declineDraw(
+  session: GameSession,
+  clientId: ClientId,
+  timestamp = now(),
+): ActionResult {
+  const role = roleForClient(session, clientId);
+
+  if (role !== 'W' && role !== 'B') {
+    return { ok: false, session, reason: 'Only players can decline a draw.' };
+  }
+
+  if (!session.drawOfferedBy) {
+    return { ok: false, session, reason: 'No draw offer is pending.' };
+  }
+
+  if (session.drawOfferedBy === role) {
+    return { ok: false, session, reason: 'You cannot decline your own draw offer.' };
+  }
+
+  return {
+    ok: true,
+    session: {
+      ...session,
+      drawOfferedBy: null,
       updatedAt: timestamp,
     },
   };
@@ -332,6 +434,7 @@ export function toPublicSession(session: GameSession): PublicGameSession {
       ...(session.players.B ? { B: publicPlayer(session.players.B) } : {}),
     },
     spectators: session.spectators.map(publicPlayer),
+    drawOfferedBy: session.drawOfferedBy,
     round: session.round,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,

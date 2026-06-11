@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { Action, GameState, PieceId } from './chess-ttt-engine';
 import {
   applyAction,
+  declareDraw,
   generateLegalActions,
   getInitialState,
   getPhase,
+  isGameOver,
 } from './chess-ttt-engine';
 
 function play(state: GameState, actions: Action[]): GameState {
@@ -112,6 +114,14 @@ describe('chess tic-tac-toe engine', () => {
       winner: 'B',
     };
 
+    expect(generateLegalActions(state)).toEqual([]);
+  });
+
+  it('ends the game as a draw when declared', () => {
+    const state = declareDraw(getInitialState('W'));
+
+    expect(state.isDraw).toBe(true);
+    expect(isGameOver(state)).toBe(true);
     expect(generateLegalActions(state)).toEqual([]);
   });
 

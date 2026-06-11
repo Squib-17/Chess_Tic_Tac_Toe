@@ -4,17 +4,21 @@ import { getPlayerName } from '../utils/display';
 import { Button } from './ui';
 
 type WinnerOverlayProps = {
-  winner: Player;
-  winnerScore: number;
+  winner: Player | null;
+  isDraw?: boolean;
+  winnerScore?: number;
   onClose: () => void;
   onNewGame: () => void;
+  onRematch?: () => void;
 };
 
 export function WinnerOverlay({
   winner,
+  isDraw = false,
   winnerScore,
   onClose,
   onNewGame,
+  onRematch,
 }: WinnerOverlayProps) {
   const newGameButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -31,6 +35,11 @@ export function WinnerOverlay({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
+  const title = isDraw ? 'Draw' : `${getPlayerName(winner!)} Wins!`;
+  const summary = isDraw
+    ? 'Both players agreed to a draw.'
+    : `Score: ${winnerScore ?? 0}`;
+
   return (
     <div className="winner-overlay" onClick={onClose}>
       <div
@@ -42,23 +51,35 @@ export function WinnerOverlay({
         aria-describedby="winner-summary"
       >
         <div className="winner-icon" aria-hidden="true">
-          {winner === 'W' ? '⚪' : '⚫'}
+          {isDraw ? '🤝' : winner === 'W' ? '⚪' : '⚫'}
         </div>
         <h1 className="winner-title" id="winner-title">
-          {getPlayerName(winner)} Wins!
+          {title}
         </h1>
         <div className="winner-score" id="winner-summary">
-          Score: {winnerScore}
+          {summary}
         </div>
-        <Button
-          className="play-again-btn"
-          onClick={onNewGame}
-          ref={newGameButtonRef}
-          variant="primary"
-          size="lg"
-        >
-          New Game
-        </Button>
+        {onRematch ? (
+          <Button
+            className="play-again-btn"
+            onClick={onRematch}
+            ref={newGameButtonRef}
+            variant="primary"
+            size="lg"
+          >
+            Rematch
+          </Button>
+        ) : (
+          <Button
+            className="play-again-btn"
+            onClick={onNewGame}
+            ref={newGameButtonRef}
+            variant="primary"
+            size="lg"
+          >
+            New Game
+          </Button>
+        )}
         <Button className="link-button modal-close" onClick={onClose} variant="ghost">
           View final position
         </Button>
